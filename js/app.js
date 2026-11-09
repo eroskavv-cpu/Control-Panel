@@ -134,18 +134,20 @@
     holdSource: null, // "pointer" | "key" | "pad"
     pressure: false, // R2 PRESSURE toggle
     trigger: 0, // how hard R2 is pressed (0-1, 5% steps)
+    dragging: false, // finger/mouse is on the drag bar
+    drag: 0, // drag bar position (0-1, 2% steps)
     remoteOn: false,
     target: null, // friend's peer id we control
     sentTo: null, // peer id we last sent a "play" to
   };
 
-  // R2 pressure beats the hold button, which beats the selected pattern
+  // Live inputs (drag bar, R2 pressure) beat the hold button,
+  // which beats the selected pattern. Drag + R2 at once: the stronger wins.
   function effective() {
-    const triggerOn = state.pressure && state.trigger > 0;
-    return {
-      pattern: triggerOn || state.holding ? "Continuous" : state.pattern,
-      intensity: triggerOn ? state.trigger : state.intensity,
-    };
+    const live = Math.max(state.pressure ? state.trigger : 0, state.dragging ? state.drag : 0);
+    if (live > 0) return { pattern: "Continuous", intensity: live };
+    if (state.holding) return { pattern: "Continuous", intensity: state.intensity };
+    return { pattern: state.pattern, intensity: state.intensity };
   }
 
   // -------------------------------------------------------------------
@@ -397,6 +399,13 @@
     pb.innerHTML = "R2 PRESSURE<br>" + (state.pressure ? "ON" : "OFF");
     pb.classList.toggle("on", state.pressure);
 
+    // drag bar
+    const dragPct = Math.round(state.drag * 100);
+    $("dragBar").classList.toggle("active", state.dragging);
+    $("dragFill").style.width = (state.dragging ? dragPct : 0) + "%";
+    $("dragThumb").style.left = dragPct + "%";
+    $("dragText").innerHTML = state.dragging ? "DRAGGING: " + dragPct + "%" : "DRAG TO VIBRATE &nbsp;←→";
+
     // remote
     const rb = $("remoteBtn");
     rb.textContent = state.remoteOn ? "ON" : "OFF";
@@ -446,32 +455,79 @@
   });
   holdBtn.addEventListener("click", (e) => e.preventDefault());
 
-  // ---- R2 pressure ----
-  // changes are sent at most 15 times a second so remote control stays smooth
-  const TRIGGER_SEND_MS = 1000 / 15;
-  let lastTriggerApply = 0;
-  let triggerQueued = false;
+  // ---- Live inputs (R2 + drag bar) ----
+  // You feel changes instantly; your friend gets them at most 15 times a
+  // second so remote control stays smooth.
+  const LIVE_SEND_MS = 1000 / 15;
+  let lastLiveApply = 0;
+  let liveQueued = false;
 
+  function liveChanged() {
+    const { pattern, intensity } = effective();
+    setChannel("self", pattern, intensity); // local: right away
+    render();
+
+    const waited = performance.now() - lastLiveApply;
+    if (waited >= LIVE_SEND_MS) {
+      lastLiveApply = performance.now();
+      apply();
+    } else if (!liveQueued) {
+      liveQueued = true;
+      setTimeout(() => {
+        liveQueued = false;
+        lastLiveApply = performance.now();
+        apply(); // uses the latest values
+      }, LIVE_SEND_MS - waited);
+    }
+  }
+
+  // ---- R2 pressure ----
   function setTrigger(value) {
     let stepped = Math.round(value * 20) / 20; // 5% steps
     if (stepped < 0.05) stepped = 0; // small deadzone so a resting finger doesn't buzz
     if (stepped === state.trigger) return;
     state.trigger = stepped;
-    render();
-
-    const waited = performance.now() - lastTriggerApply;
-    if (waited >= TRIGGER_SEND_MS) {
-      lastTriggerApply = performance.now();
-      apply();
-    } else if (!triggerQueued) {
-      triggerQueued = true;
-      setTimeout(() => {
-        triggerQueued = false;
-        lastTriggerApply = performance.now();
-        apply(); // uses the latest trigger value
-      }, TRIGGER_SEND_MS - waited);
-    }
+    liveChanged();
   }
+
+  // ---- Drag to vibrate ----
+  const dragBar = $("dragBar");
+  let dragPointer = null;
+
+  function dragTo(clientX) {
+    const r = dragBar.getBoundingClientRect();
+    let v = Math.round(clamp01((clientX - r.left) / r.width) * 50) / 50; // 2% steps
+    if (v < 0.02) v = 0;
+    if (v === state.drag && state.dragging) return;
+    state.drag = v;
+    state.dragging = true;
+    liveChanged();
+  }
+
+  function endDrag() {
+    if (dragPointer === null) return;
+    dragPointer = null;
+    state.dragging = false;
+    state.drag = 0;
+    apply(); // stop right away, no waiting
+  }
+
+  dragBar.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    dragPointer = e.pointerId;
+    try {
+      dragBar.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    dragTo(e.clientX);
+  });
+  dragBar.addEventListener("pointermove", (e) => {
+    if (e.pointerId === dragPointer) dragTo(e.clientX);
+  });
+  dragBar.addEventListener("pointerup", endDrag);
+  dragBar.addEventListener("pointercancel", endDrag);
+  dragBar.addEventListener("lostpointercapture", endDrag);
+  dragBar.addEventListener("contextmenu", (e) => e.preventDefault());
+  window.addEventListener("blur", endDrag);
 
   $("pressureBtn").addEventListener("click", () => {
     state.pressure = !state.pressure;
@@ -484,6 +540,9 @@
     state.pattern = null;
     state.holding = false;
     state.holdSource = null;
+    dragPointer = null;
+    state.dragging = false;
+    state.drag = 0;
     apply();
     if (!channels.size) stopAllHardware();
   });

@@ -11,6 +11,8 @@ friend's controller. It's the web version of our Roblox vibration game.
   Simmer, Storm (tap the active one again to turn it off)
 - **Hold to vibrate**: vibrates while you hold it, stops when you let go
 - **R2 pressure**: when on, how hard you press R2 sets how hard it vibrates
+- **Drag to vibrate**: press the bar and slide left/right, and the strength follows
+  your finger or mouse live (left = soft, right = full). Let go and it stops.
 - **Remote control**: connect with a code and control a friend's controller.
   You feel it too, and your commands override whatever they have turned on.
 - **Phone vibration**: on Android with no controller, the phone vibrates instead
