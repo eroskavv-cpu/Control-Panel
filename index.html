@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Control Panel</title>
+  <meta name="description" content="Control your PS4/PS5 controller's vibration, or remote-control a friend's.">
+  <meta name="theme-color" content="#0d0e12">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- PeerJS: connects two browsers directly for remote control (free, no account) -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <button id="openBtn" class="open-btn" type="button" hidden>VIBRATION [V]</button>
+
+  <main id="panel" class="panel" aria-label="Vibration control panel">
+    <div class="title-row">
+      <h1>VIBRATION</h1>
+      <button id="closeBtn" class="close" type="button" aria-label="Close panel">X</button>
+    </div>
+
+    <div class="label">INTENSITY</div>
+    <div id="intensityGrid" class="grid intensity"></div>
+
+    <div class="label center">PATTERNS</div>
+    <div id="patternGrid" class="grid patterns"></div>
+
+    <div class="hold-row">
+      <button id="holdBtn" class="hold" type="button">
+        <i class="fill" id="holdFill"></i>
+        <span id="holdText">HOLD TO VIBRATE</span>
+      </button>
+      <button id="pressureBtn" class="pressure" type="button">R2 PRESSURE<br>OFF</button>
+    </div>
+
+    <section class="remote">
+      <div class="divider"></div>
+      <div class="remote-head">
+        <div class="label big">REMOTE CONTROL</div>
+        <button id="remoteBtn" class="pill" type="button">OFF</button>
+      </div>
+      <p id="hint" class="hint"></p>
+
+      <div class="code-row">
+        <span class="mini">YOUR CODE</span>
+        <span id="myCode" class="code">····</span>
+        <button id="copyBtn" class="small" type="button">COPY</button>
+        <input id="nameInput" class="name" maxlength="16" placeholder="YOUR NAME" autocomplete="off" aria-label="Your name">
+      </div>
+      <div class="code-row">
+        <input id="friendCode" maxlength="4" placeholder="FRIEND'S CODE" autocomplete="off" autocapitalize="characters" aria-label="Friend's code">
+        <button id="connectBtn" class="small wide" type="button">CONNECT</button>
+      </div>
+      <p id="connectMsg" class="hint"></p>
+
+      <div id="friends" class="friends" hidden></div>
+    </section>
+
+    <button id="stopBtn" class="stop" type="button">STOP VIBRATIONS</button>
+
+    <div class="meters" aria-hidden="true">
+      <div class="meter">STRONG MOTOR<div class="bar"><i id="strongBar"></i></div></div>
+      <div class="meter">WEAK MOTOR<div class="bar"><i id="weakBar"></i></div></div>
+    </div>
+
+    <p id="status" class="status"></p>
+    <p id="info" class="info"></p>
+  </main>
+
+  <script src="js/patterns.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
