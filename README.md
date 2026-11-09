@@ -33,6 +33,9 @@ friend's controller. It's the web version of our Roblox vibration game.
 3. Turn **Remote Control ON**, pick your friend, and choose a pattern.
 4. Keep the page open and in front, since browsers slow down hidden tabs.
 
+Only the person controlling needs Remote Control ON. The other person just
+keeps the page open.
+
 ## Where it works
 
 | Setup | Controller vibrates? |
@@ -59,5 +62,6 @@ On phones you need to **tap the page once** before it's allowed to vibrate.
 - `js/patterns.js`: the 18 vibration patterns
 - `js/app.js`: vibration, hold, R2, controller navigation and remote control
 
-Remote control uses [PeerJS](https://peerjs.com/), which connects the two browsers
-directly with its free public server, so no account is needed.
+Remote control sends small messages through two free public relay servers
+(EMQX and HiveMQ, using MQTT), so it works between any two networks and needs
+no account. If one server is down, the other one still works.

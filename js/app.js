@@ -151,37 +151,60 @@
   }
 
   // -------------------------------------------------------------------
-  // Remote control (PeerJS)
+  // Remote control: messages go through free public relay servers
+  // (MQTT over secure WebSocket), so it works between any two networks.
+  // Two servers are used at once: if one is down, the other still works.
   // -------------------------------------------------------------------
-  const PREFIX = "vibe-ctrl-";
+  const BROKERS = ["wss://broker.emqx.io:8084/mqtt", "wss://broker.hivemq.com:8884/mqtt"];
+  const NS = "vibe-ctrl-panel-7f3k9q"; // topic prefix for this app
   const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I
-  const friends = new Map(); // peerId -> { conn, name }
-  let peer = null;
-  let myCode = null;
-  let peerState = "CONNECTING";
+  const PING_MS = 3000; // "I'm still here" message to friends
+  const FRIEND_TIMEOUT_MS = 12000; // friend gone if silent this long
+  const REMOTE_EXPIRE_MS = 3500; // incoming vibration stops if not refreshed
 
-  const codeFromId = (id) => id.slice(PREFIX.length);
+  const friends = new Map(); // code -> { name, lastSeen }
+  const relays = []; // { client, connected }
+  const seenIds = new Set();
+  const seenOrder = [];
+  let msgCounter = 0;
+  let pendingConnect = null;
+  let connectTimer = null;
 
   function randomCode() {
     const a = new Uint32Array(4);
     crypto.getRandomValues(a);
     return Array.from(a, (n) => ALPHABET[n % ALPHABET.length]).join("");
   }
+  const myCode = randomCode();
+  const inbox = (code) => NS + "/inbox/" + code;
 
-  function send(conn, msg) {
-    try {
-      if (conn && conn.open) conn.send(msg);
-    } catch (e) {}
+  function relaysOnline() {
+    return relays.filter((r) => r.connected).length;
+  }
+  function remoteState() {
+    if (!window.mqtt) return "OFFLINE";
+    const n = relaysOnline();
+    return n ? "ONLINE (" + n + "/" + relays.length + " SERVERS)" : "CONNECTING";
+  }
+
+  // send a message to a friend's inbox on every relay server
+  function sendTo(code, msg, reliable) {
+    const payload = JSON.stringify(Object.assign({}, msg, { from: myCode, id: myCode + "-" + ++msgCounter }));
+    for (const r of relays) {
+      if (!r.connected) continue;
+      try {
+        r.client.publish(inbox(code), payload, { qos: reliable ? 1 : 0 });
+      } catch (e) {}
+    }
   }
 
   function myName() {
-    return ($("nameInput").value.trim() || "PLAYER " + (myCode || "")).toUpperCase().slice(0, 16);
+    return ($("nameInput").value.trim() || "PLAYER " + myCode).toUpperCase().slice(0, 16);
   }
 
   function stopRemote() {
     if (state.sentTo) {
-      const f = friends.get(state.sentTo);
-      if (f) send(f.conn, { t: "stop" });
+      sendTo(state.sentTo, { t: "stop" }, true);
       state.sentTo = null;
     }
   }
@@ -193,9 +216,9 @@
     setChannel("self", pattern, intensity);
 
     const f = state.target && friends.get(state.target);
-    if (pattern && state.remoteOn && f && f.conn.open) {
+    if (pattern && state.remoteOn && f) {
       if (state.sentTo && state.sentTo !== state.target) stopRemote();
-      send(f.conn, { t: "play", pattern, intensity });
+      sendTo(state.target, { t: "play", pattern, intensity });
       state.sentTo = state.target;
     } else {
       stopRemote();
@@ -207,94 +230,145 @@
     $("connectMsg").textContent = text;
   }
 
-  function startPeer() {
-    if (!window.Peer) {
-      peerState = "OFFLINE";
+  function addFriend(code, name) {
+    const f = friends.get(code) || { name: "PLAYER " + code, lastSeen: 0 };
+    if (name) f.name = name;
+    f.lastSeen = Date.now();
+    friends.set(code, f);
+    render();
+  }
+
+  function dropFriend(code) {
+    if (!friends.has(code)) return;
+    friends.delete(code);
+    setChannel("remote:" + code, null);
+    if (state.target === code) state.target = null;
+    if (state.sentTo === code) state.sentTo = null;
+    render();
+  }
+
+  function onMessage(topic, payload) {
+    let d;
+    try {
+      d = JSON.parse(payload.toString());
+    } catch (e) {
+      return;
+    }
+    if (!d || typeof d !== "object" || typeof d.from !== "string") return;
+    const code = d.from;
+    if (code === myCode || !/^[A-Z0-9]{4}$/.test(code)) return;
+
+    // the same message arrives once per relay server: only handle it once
+    if (typeof d.id === "string") {
+      if (seenIds.has(d.id)) return;
+      seenIds.add(d.id);
+      seenOrder.push(d.id);
+      if (seenOrder.length > 400) seenIds.delete(seenOrder.shift());
+    }
+
+    const name = typeof d.name === "string" ? d.name.toUpperCase().slice(0, 16).trim() : "";
+
+    if (d.t === "hello") {
+      // someone typed our code: add them and answer
+      addFriend(code, name);
+      sendTo(code, { t: "welcome", name: myName() }, true);
+      return;
+    }
+    if (d.t === "welcome") {
+      addFriend(code, name);
+      if (pendingConnect === code) {
+        pendingConnect = null;
+        clearInterval(connectTimer);
+        setConnectMsg("Connected!");
+        setTimeout(() => {
+          if ($("connectMsg").textContent === "Connected!") setConnectMsg("");
+        }, 2000);
+      }
+      return;
+    }
+    if (d.t === "bye") {
+      dropFriend(code);
+      return;
+    }
+
+    const f = friends.get(code);
+    if (!f) return; // ignore anyone we're not connected to
+    f.lastSeen = Date.now();
+
+    if (d.t === "play" && typeof d.pattern === "string" && P.fns[d.pattern]) {
+      setChannel("remote:" + code, d.pattern, clamp01(Number(d.intensity) || 0));
+      channels.get("remote:" + code).seen = Date.now();
+    } else if (d.t === "stop") {
+      setChannel("remote:" + code, null);
+    }
+  }
+
+  function startRelay() {
+    $("myCode").textContent = myCode;
+    if (!window.mqtt) {
       setConnectMsg("Remote control couldn't load. Check your internet and refresh.");
       render();
       return;
     }
-    myCode = randomCode();
-    peerState = "CONNECTING";
-    peer = new window.Peer(PREFIX + myCode, { debug: 0 });
-
-    peer.on("open", () => {
-      peerState = "ONLINE";
-      $("myCode").textContent = myCode;
-      render();
-    });
-    peer.on("connection", setupConn);
-    peer.on("disconnected", () => {
-      peerState = "RECONNECTING";
-      render();
+    for (const url of BROKERS) {
+      const r = { client: null, connected: false };
       try {
-        peer.reconnect();
-      } catch (e) {}
-    });
-    peer.on("error", (err) => {
-      const type = err && err.type;
-      if (type === "unavailable-id") {
-        // someone already has this code, pick another
-        peer.destroy();
-        startPeer();
-        return;
+        r.client = window.mqtt.connect(url, {
+          clientId: "vibe_" + myCode + "_" + Math.random().toString(36).slice(2, 8),
+          keepalive: 20,
+          reconnectPeriod: 2000,
+          connectTimeout: 8000,
+          clean: true,
+        });
+      } catch (e) {
+        continue;
       }
-      if (type === "peer-unavailable") {
-        setConnectMsg("No one found with that code. Check it and try again.");
-      } else if (type === "network" || type === "server-error" || type === "socket-error") {
-        peerState = "OFFLINE";
-        setConnectMsg("Can't reach the connection server. Refresh to try again.");
-      } else {
-        setConnectMsg("Connection problem (" + type + ").");
-      }
-      render();
-    });
-  }
-
-  function setupConn(conn) {
-    conn.on("open", () => {
-      const old = friends.get(conn.peer);
-      if (old && old.conn !== conn) {
-        try {
-          old.conn.close();
-        } catch (e) {}
-      }
-      friends.set(conn.peer, { conn, name: "PLAYER " + codeFromId(conn.peer) });
-      send(conn, { t: "hello", name: myName() });
-      setConnectMsg("");
-      render();
-    });
-    conn.on("data", (d) => onData(conn, d));
-    conn.on("close", () => dropFriend(conn));
-    conn.on("error", () => dropFriend(conn));
-  }
-
-  function dropFriend(conn) {
-    const f = friends.get(conn.peer);
-    if (!f || f.conn !== conn) return;
-    friends.delete(conn.peer);
-    setChannel("remote:" + conn.peer, null);
-    if (state.target === conn.peer) state.target = null;
-    if (state.sentTo === conn.peer) state.sentTo = null;
-    render();
-  }
-
-  function onData(conn, d) {
-    if (!d || typeof d !== "object") return;
-    const f = friends.get(conn.peer);
-    if (d.t === "hello" && f) {
-      const name = String(d.name || "").toUpperCase().slice(0, 16).trim();
-      if (name) f.name = name;
-      render();
-    } else if (d.t === "play" && typeof d.pattern === "string" && P.fns[d.pattern]) {
-      setChannel("remote:" + conn.peer, d.pattern, clamp01(Number(d.intensity) || 0));
-    } else if (d.t === "stop") {
-      setChannel("remote:" + conn.peer, null);
+      r.client.on("connect", () => {
+        r.connected = true;
+        r.client.subscribe(inbox(myCode), { qos: 1 });
+        render();
+      });
+      r.client.on("close", () => {
+        r.connected = false;
+        render();
+      });
+      r.client.on("offline", () => {
+        r.connected = false;
+      });
+      r.client.on("error", () => {});
+      r.client.on("message", onMessage);
+      relays.push(r);
     }
   }
 
-  function connectTo(code) {
-    code = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // every second: keep friends updated, drop silent ones, expire stale vibration
+  let lastPing = 0;
+  setInterval(() => {
+    const now = Date.now();
+
+    if (now - lastPing >= PING_MS) {
+      lastPing = now;
+      for (const code of friends.keys()) sendTo(code, { t: "ping" });
+    }
+
+    // re-send what we're playing so a lost message can't leave it stuck
+    if (state.sentTo && friends.has(state.sentTo)) {
+      const { pattern, intensity } = effective();
+      if (pattern) sendTo(state.sentTo, { t: "play", pattern, intensity });
+    }
+
+    for (const [code, f] of friends) {
+      if (now - f.lastSeen > FRIEND_TIMEOUT_MS) dropFriend(code);
+    }
+
+    // if the controller vanished mid-vibration, stop it here
+    for (const [key, ch] of channels) {
+      if (key.startsWith("remote:") && ch.seen && now - ch.seen > REMOTE_EXPIRE_MS) channels.delete(key);
+    }
+  }, 1000);
+
+  function connectTo(raw) {
+    const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (code.length !== 4) {
       setConnectMsg("Codes are 4 letters/numbers.");
       return;
@@ -303,16 +377,34 @@
       setConnectMsg("That's your own code. Enter your friend's.");
       return;
     }
-    if (!peer || peerState !== "ONLINE") {
-      setConnectMsg("Still connecting, try again in a second.");
+    if (!relaysOnline()) {
+      setConnectMsg("Still connecting to the server, try again in a second.");
       return;
     }
-    if (friends.has(PREFIX + code)) {
+    if (friends.has(code)) {
       setConnectMsg("Already connected to that friend.");
       return;
     }
+
+    pendingConnect = code;
     setConnectMsg("Connecting…");
-    setupConn(peer.connect(PREFIX + code, { reliable: true }));
+    clearInterval(connectTimer);
+    let tries = 0;
+    const attempt = () => {
+      if (pendingConnect !== code) {
+        clearInterval(connectTimer);
+        return;
+      }
+      if (++tries > 6) {
+        clearInterval(connectTimer);
+        pendingConnect = null;
+        setConnectMsg("No answer from " + code + ". Check the code and make sure your friend has the page open.");
+        return;
+      }
+      sendTo(code, { t: "hello", name: myName() }, true);
+    };
+    attempt();
+    connectTimer = setInterval(attempt, 1500);
   }
 
   // -------------------------------------------------------------------
@@ -576,7 +668,7 @@
     try {
       localStorage.setItem("vibeName", $("nameInput").value.trim());
     } catch (e) {}
-    for (const f of friends.values()) send(f.conn, { t: "hello", name: myName() });
+    for (const code of friends.keys()) sendTo(code, { t: "welcome", name: myName() }, true);
   });
 
   // ---- Open / close ----
@@ -722,7 +814,7 @@
     });
     lines.push("SENDING VIBRATION TO: " + sendingTo);
     lines.push(
-      "REMOTE: " + peerState + (myCode && peerState === "ONLINE" ? " (CODE " + myCode + ")" : "") +
+      "REMOTE: " + remoteState() + " | CODE " + myCode +
         " | FRIENDS CONNECTED: " + friends.size
     );
     $("info").textContent = lines.join("\n").toUpperCase();
@@ -751,5 +843,11 @@
 
   render();
   updateStatus(getPads());
-  startPeer();
+  // tell friends we're leaving so they stop right away
+  window.addEventListener("pagehide", () => {
+    stopRemote();
+    for (const code of friends.keys()) sendTo(code, { t: "bye" });
+  });
+
+  startRelay();
 })();
