@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=6">
   <!-- MQTT: sends remote-control messages through free relay servers (no account) -->
   <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 </head>
@@ -83,7 +83,8 @@
     <p id="info" class="info"></p>
   </main>
 
-  <script src="js/patterns.js"></script>
-  <script src="js/app.js"></script>
+  <!-- ?v=6 forces browsers to load fresh files: bump the number on every update -->
+  <script src="js/patterns.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>
