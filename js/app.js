@@ -436,6 +436,7 @@
 
   const allPatterns = P.order
     .map((n) => [n, "patternGrid"])
+    .concat((P.smoothOrder || []).map((n) => [n, "smoothGrid"]))
     .concat((P.intenseOrder || []).map((n) => [n, "intenseGrid"]))
     .concat((P.maxOrder || []).map((n) => [n, "maxGrid"]));
   for (const [name, grid] of allPatterns) {

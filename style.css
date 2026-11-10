@@ -83,6 +83,15 @@ button:focus-visible, input:focus-visible, .gp-focus {
 .intensity button { height: 42px; font-size: 15px; }
 .patterns button { height: 44px; font-size: 11px; padding: 0 4px; }
 
+/* SMOOTH patterns */
+.smooth-label { margin-top: 4px; color: #7fd6ff; }
+.smooth-label span { color: var(--sub); font-size: 10px; }
+.smooth button { border: 1.5px solid rgba(90, 190, 255, 0.45); }
+.smooth button.sel, .smooth button.sel:hover {
+  background: linear-gradient(135deg, #3fa9ff, var(--accent));
+  border-color: transparent;
+}
+
 /* INTENSE patterns */
 .intense-label { margin-top: 4px; color: #ffb35c; }
 .intense-label span { color: var(--sub); font-size: 10px; }

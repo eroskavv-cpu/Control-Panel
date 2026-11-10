@@ -204,10 +204,72 @@
       const level = 0.3 + 0.7 * r * r;
       return [level * (0.8 + 0.2 * rnd(t, 18, 61)), level * (0.5 + 0.5 * rnd(t, 24, 62))];
     },
+
+    // ---- SMOOTH patterns: no sudden jumps, slow rises and falls.
+    // They follow the intensity buttons.
+
+    // slow swell up and down every 4 seconds, never fully off
+    Flow: (t) => {
+      const v = 0.35 + 0.65 * (1 - Math.cos((t * TAU) / 4)) / 2;
+      return [v, v * 0.7];
+    },
+
+    // 20s slow climb to full, 5s at the top, 5s easing back down
+    "Slow Build": (t) => {
+      const p = t % 30;
+      let v;
+      if (p < 20) v = 0.25 + 0.75 * (p / 20) ** 1.5;
+      else if (p < 25) v = 1;
+      else v = 1 - 0.75 * ((p - 25) / 5);
+      return [v, v * 0.8];
+    },
+
+    // rises close to the top over 6s, glides back down, rests low (peak varies each time)
+    Tease: (t) => {
+      const cycle = Math.floor(t / 8);
+      const p = t - cycle * 8;
+      const peak = 0.75 + 0.2 * hash01(cycle * 13 + 5);
+      const ease = (x) => (1 - Math.cos(Math.PI * x)) / 2; // smooth 0 -> 1
+      let v;
+      if (p < 6) v = 0.15 + (peak - 0.15) * ease(p / 6);
+      else if (p < 7) v = peak - (peak - 0.15) * ease(p - 6);
+      else v = 0.15;
+      return [v, v * 0.75];
+    },
+
+    // two slow waves overlapping, so it feels organic and never repeats exactly
+    Rolling: (t) => {
+      const a = (Math.sin(t * TAU * 0.5) + 1) / 2;
+      const b = (Math.sin(t * TAU * 0.17 + 1) + 1) / 2;
+      return [0.35 + 0.65 * (0.6 * a + 0.4 * b), 0.3 + 0.7 * b];
+    },
+
+    // steady deep rumble (left grip) with a gentle buzz drifting on top
+    Deep: (t) => [0.85 + 0.15 * Math.sin(t * TAU * 0.3), 0.15 + 0.1 * Math.sin(t * TAU * 0.7)],
+
+    // steps up 10% every 6 seconds (gliding into each step), holds at the top,
+    // then eases back down to start again
+    Escalate: (t) => {
+      const p = t % 72;
+      let level;
+      if (p < 54) {
+        const step = Math.floor(p / 6); // 0..8
+        const glide = Math.min(1, (p - step * 6) / 1.5);
+        level = (step + 1 + glide) / 10; // 10% .. 100%
+      } else if (p < 66) {
+        level = 1;
+      } else {
+        const x = (p - 66) / 6; // 6s ease back down
+        level = 1 - 0.9 * (1 - Math.cos(Math.PI * x)) / 2; // lands on 10%, where it restarts
+      }
+      level = Math.max(0.1, Math.min(1, level));
+      return [level, level * 0.85];
+    },
   };
 
+  const smoothOrder = ["Flow", "Slow Build", "Tease", "Rolling", "Deep", "Escalate"];
   const maxOrder = ["Overdrive", "Hammer", "Earthquake", "Build-up", "Jackhammer", "Rampage"];
   const intenseOrder = ["Pound", "Grind", "Frenzy", "Shudder", "Relentless", "Punish"];
 
-  window.VibePatterns = { order, maxOrder, intenseOrder, fns };
+  window.VibePatterns = { order, smoothOrder, maxOrder, intenseOrder, fns };
 })();
