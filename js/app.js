@@ -147,6 +147,8 @@
     const live = Math.max(state.pressure ? state.trigger : 0, state.dragging ? state.drag : 0);
     if (live > 0) return { pattern: "Continuous", intensity: live };
     if (state.holding) return { pattern: "Continuous", intensity: state.intensity };
+    // MAX patterns always play at full power
+    if (state.pattern && P.maxOrder.includes(state.pattern)) return { pattern: state.pattern, intensity: 1 };
     return { pattern: state.pattern, intensity: state.intensity };
   }
 
@@ -432,8 +434,9 @@
     });
   }
 
-  for (const name of P.order) {
-    const b = makeButton(name, $("patternGrid"));
+  const allPatterns = P.order.map((n) => [n, "patternGrid"]).concat(P.maxOrder.map((n) => [n, "maxGrid"]));
+  for (const [name, grid] of allPatterns) {
+    const b = makeButton(name, $(grid));
     patternButtons.set(name, b);
     b.addEventListener("click", () => {
       // tapping the active pattern again turns it off

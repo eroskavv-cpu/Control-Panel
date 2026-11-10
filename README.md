@@ -9,6 +9,8 @@ friend's controller. It's the web version of our Roblox vibration game.
 - **18 patterns**: Continuous, Pulse, Heartbeat, Wave, Intermittent, Ripple, Throb,
   Beat, Vibrate, Surge, Drill, Shield, Rattle, Explosion, Frostbite, Pulsetrain,
   Simmer, Storm (tap the active one again to turn it off)
+- **6 MAX patterns** (always full power, ignore the intensity buttons):
+  Overdrive, Hammer, Earthquake, Build-up, Jackhammer, Rampage
 - **Hold to vibrate**: vibrates while you hold it, stops when you let go
 - **R2 pressure**: when on, how hard you press R2 sets how hard it vibrates
 - **Drag to vibrate**: press the bar and slide left/right, and the strength follows

@@ -111,7 +111,54 @@
       if (thunder) return [1, 1];
       return [0.25 + 0.45 * rnd(t, 12, 6), rnd(t, 12, 9) * 0.6];
     },
+
+    // ---- MAX patterns: always full power, built to feel as strong as possible.
+    // Steady buzzing starts to feel weaker after a few seconds, so these use
+    // contrast (dips, gaps, surges, build-ups) to keep every hit feeling hard.
+
+    // full power with tiny dips twice a second so it never fades into the background
+    Overdrive: (t) => ((t % 0.5) < 0.045 ? [0.55, 0.4] : [1, 1]),
+
+    // hard 100% hits with short gaps: the gaps make each hit feel heavier
+    Hammer: (t) => {
+      const v = (t % 0.42) < 0.2 ? 1 : 0;
+      return [v, v];
+    },
+
+    // deep motor always at full, buzz motor surging on top with random jolts
+    Earthquake: (t) => {
+      const surge = (Math.sin(t * TAU * 1.4) + 1) / 2;
+      const jolt = rnd(t, 10, 11) > 0.85 ? 1 : 0;
+      return [1, Math.max(0.35 + 0.65 * surge, jolt)];
+    },
+
+    // climbs from soft to max, slams at full, short pause, repeat
+    "Build-up": (t) => {
+      const p = t % 5.2;
+      if (p < 3.6) {
+        const r = p / 3.6;
+        return [r * r, r];
+      }
+      if (p < 4.8) return [1, 1];
+      return [0, 0];
+    },
+
+    // rough and mechanical: deep motor pounding fast, buzz motor chattering hard
+    Jackhammer: (t) => {
+      const pound = (t % 0.11) < 0.07 ? 1 : 0.45;
+      const chatter = (t % 0.04) < 0.02 ? 1 : 0.5;
+      return [pound, chatter];
+    },
+
+    // rough and chaotic: random full-power slams over a gritty, uneven buzz
+    Rampage: (t) => {
+      const slam = rnd(t, 9, 21) > 0.35 ? 1 : 0.3;
+      const grit = 0.6 + 0.4 * rnd(t, 30, 22);
+      return [slam, Math.max(grit, slam * 0.9)];
+    },
   };
 
-  window.VibePatterns = { order, fns };
+  const maxOrder = ["Overdrive", "Hammer", "Earthquake", "Build-up", "Jackhammer", "Rampage"];
+
+  window.VibePatterns = { order, maxOrder, fns };
 })();

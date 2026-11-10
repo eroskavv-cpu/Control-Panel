@@ -83,6 +83,15 @@ button:focus-visible, input:focus-visible, .gp-focus {
 .intensity button { height: 42px; font-size: 15px; }
 .patterns button { height: 44px; font-size: 11px; padding: 0 4px; }
 
+/* MAX patterns */
+.max-label { margin-top: 4px; color: #ff8a95; }
+.max-label span { color: var(--sub); font-size: 10px; }
+.max button { border: 1.5px solid rgba(255, 82, 97, 0.55); }
+.max button.sel, .max button.sel:hover {
+  background: linear-gradient(135deg, var(--accent), var(--stop));
+  border-color: transparent;
+}
+
 .close { width: 34px; height: 34px; font-size: 14px; }
 
 /* Hold to vibrate + R2 pressure */
