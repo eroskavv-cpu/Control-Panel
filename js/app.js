@@ -434,7 +434,10 @@
     });
   }
 
-  const allPatterns = P.order.map((n) => [n, "patternGrid"]).concat(P.maxOrder.map((n) => [n, "maxGrid"]));
+  const allPatterns = P.order
+    .map((n) => [n, "patternGrid"])
+    .concat(P.intenseOrder.map((n) => [n, "intenseGrid"]))
+    .concat(P.maxOrder.map((n) => [n, "maxGrid"]));
   for (const [name, grid] of allPatterns) {
     const b = makeButton(name, $(grid));
     patternButtons.set(name, b);

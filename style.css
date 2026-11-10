@@ -83,6 +83,15 @@ button:focus-visible, input:focus-visible, .gp-focus {
 .intensity button { height: 42px; font-size: 15px; }
 .patterns button { height: 44px; font-size: 11px; padding: 0 4px; }
 
+/* INTENSE patterns */
+.intense-label { margin-top: 4px; color: #ffb35c; }
+.intense-label span { color: var(--sub); font-size: 10px; }
+.intense button { border: 1.5px solid rgba(255, 160, 60, 0.5); }
+.intense button.sel, .intense button.sel:hover {
+  background: linear-gradient(135deg, #ff8a3d, var(--stop));
+  border-color: transparent;
+}
+
 /* MAX patterns */
 .max-label { margin-top: 4px; color: #ff8a95; }
 .max-label span { color: var(--sub); font-size: 10px; }

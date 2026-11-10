@@ -156,9 +156,58 @@
       const grit = 0.6 + 0.4 * rnd(t, 30, 22);
       return [slam, Math.max(grit, slam * 0.9)];
     },
+
+    // ---- INTENSE patterns: rough and harsh, but they follow the intensity
+    // buttons, so 100% is brutal and lower settings stay rough but softer.
+
+    // fast, heavy thumps with a harsh buzz on every hit
+    Pound: (t) => {
+      const hit = (t % 0.25) < 0.15;
+      return hit ? [1, 0.9] : [0.25, 0.15];
+    },
+
+    // deep motor grinding high nonstop, buzz motor rough and uneven on top
+    Grind: (t) => [0.85 + 0.15 * rnd(t, 15, 31), 0.5 + 0.5 * rnd(t, 25, 32)],
+
+    // hits speed up from 2 to 10 a second over 8s, then 2s of full blast
+    Frenzy: (t) => {
+      const p = t % 10;
+      if (p >= 8) return [1, 1];
+      const rate = 2 + p; // hits per second, climbing
+      const phase = (p * rate) % 1;
+      const v = phase < 0.55 ? 1 : 0.1;
+      return [v, v];
+    },
+
+    // full power that violently cuts out and slams back at random
+    Shudder: (t) => {
+      const cut = rnd(t, 22, 41) > 0.7;
+      return cut ? [0.15, 0] : [1, 0.6 + 0.4 * rnd(t, 22, 42)];
+    },
+
+    // rough jackhammer texture that steps up every 5s until it's at full, then holds
+    Relentless: (t) => {
+      const p = t % 50;
+      const level = p < 40 ? 0.3 + 0.7 * (Math.floor(p / 5) / 7) : 1;
+      const texture = (t % 0.12) < 0.08 ? 1 : 0.55;
+      return [Math.min(1, level * texture), Math.min(1, level * (0.6 + 0.4 * rnd(t, 25, 51)))];
+    },
+
+    // rough grind building over 15s into 5s of nonstop full-power slamming
+    Punish: (t) => {
+      const p = t % 20;
+      if (p >= 15) {
+        const v = (t % 0.2) < 0.14 ? 1 : 0.7;
+        return [v, 1];
+      }
+      const r = p / 15;
+      const level = 0.3 + 0.7 * r * r;
+      return [level * (0.8 + 0.2 * rnd(t, 18, 61)), level * (0.5 + 0.5 * rnd(t, 24, 62))];
+    },
   };
 
   const maxOrder = ["Overdrive", "Hammer", "Earthquake", "Build-up", "Jackhammer", "Rampage"];
+  const intenseOrder = ["Pound", "Grind", "Frenzy", "Shudder", "Relentless", "Punish"];
 
-  window.VibePatterns = { order, maxOrder, fns };
+  window.VibePatterns = { order, maxOrder, intenseOrder, fns };
 })();
